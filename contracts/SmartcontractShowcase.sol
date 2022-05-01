@@ -2279,12 +2279,22 @@ pragma solidity 0.8.10;
 
 
 
+/**
+    A number of people have asked me for tips.
 
+    One method that we use often at
+     is:
+    1. Allowlist a subset of addresses
+    2. Give them a limited amount of time to mint
+    3. Allowlist the next subset. Repeat until minted out.
+
+    This prevents everyone trying to mint at once.
+**/
 contract SmartcontractShowcase is ERC721A, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
-    uint256 MAX_SUPPLY = 10000;
+    uint256 MAX_SUPPLY = 10;
     bool isAllowListActive = false;
     bool saleIsActive = false;
 
@@ -2316,22 +2326,16 @@ contract SmartcontractShowcase is ERC721A, Ownable {
         REVEAL_TIMESTAMP = saleStart + (86400 * 9);
     }
 
-    function setBaseURI(string memory baseURI_) external onlyOwner {
-        _baseURIextended = baseURI_;
-    }
-
     function _baseURI() internal view virtual override returns (string memory) {
-        return 'https://ipfs.io/ipfs/';
+        return 'https://ipfs.io/ipfs/QmPqLuxWHfZdebZw88ofP2EzY4X1fVdodWTj26NYiMFqzy/';
     }
 
-    function _setTokenURI(uint256 tokenId, string memory _tokenURI) external onlyOwner{
-        _tokenURIs[tokenId] = _tokenURI;
-    }
+    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+        if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
 
-    function tokenURI(uint256 tokenId) public view virtual override returns (string memory){
-        return string(abi.encodePacked(_baseURIextended, _tokenURIs[tokenId]));
+        string memory baseURI = _baseURI();
+        return bytes(baseURI).length != 0 ? string(abi.encodePacked(baseURI, startingIndex + tokenId)) : '';
     }
-
 
     function flipIsAllowListActive() public onlyOwner {
         isAllowListActive = !isAllowListActive;
@@ -2360,12 +2364,21 @@ contract SmartcontractShowcase is ERC721A, Ownable {
         require(ts + numTokens <= MAX_SUPPLY, "Exceeded max supply");
         require(tokenPrice * numTokens <= msg.value, "Not enough ETH to mint the provided number of tokens");
 
-        _safeMint(msg.sender, numTokens);
+        _mint(msg.sender, numTokens,'', true); // We can assume that all addresses trying to mint are able to recieve token
+
 
 
         _allowList[msg.sender] -= numTokens;
     }
 
+
+    /**
+       Gas optimization 3: Switch from _safeMint() to _mint()
+
+        _safeMint() checks every address to ensure that it can handle NFTs. If the address is not able to handle NFTs, it ensures that the transaction will fail.
+
+        This is unnecessary. Every address minting can likely handle NFTs.
+    **/
 
     // Token tiers
     // Provenance hash
@@ -2389,7 +2402,7 @@ contract SmartcontractShowcase is ERC721A, Ownable {
         require(totalSupply() + numberOfTokens <= MAX_SUPPLY, "Exceeded max limit of allowed token mints");
         require(tokenPrice.mul(numberOfTokens) <= msg.value, "Not enough ETH to mint the provided number of tokens");
 
-        _safeMint(msg.sender, numberOfTokens);
+        _mint(msg.sender, numberOfTokens,'', true); // We can assume that all addresses trying to mint are able to recieve token
 
         // If we haven't set the starting index and this is either 1) the last saleable token or 2) the first token to be sold after
         // the end of pre-sale, set the starting index block
